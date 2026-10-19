@@ -154,6 +154,8 @@ class EulerSolver2D:
     `inflow = (side, mask, W_in)` overrides the ghost cells of that side where
     `mask` (length of that side) is True with the fixed primitive state W_in
     (a supersonic / sonic inflow, e.g. a nozzle exit).
+    `sponge` (shape [ny, nx], units 1/time) adds a relaxation term
+    -sponge * (U - U_amb) that absorbs structures near open boundaries.
     """
 
     def __init__(self, nx: int, ny: int, dx: float, dy: float, *,
@@ -166,6 +168,7 @@ class EulerSolver2D:
                  gamma: float = GAMMA,
                  device: str | torch.device = "cpu",
                  dtype: torch.dtype = torch.float64,
+                 sponge: torch.Tensor | None = None,
                  compile: bool = False):
         self.nx, self.ny, self.dx, self.dy = nx, ny, dx, dy
         self.gamma, self.limiter = gamma, limiter
@@ -187,6 +190,11 @@ class EulerSolver2D:
             side, mask, W_in = inflow
             inflow = (side, mask.to(self.device), W_in.to(**kw))
         self.inflow = inflow
+        self.sponge = None
+        if sponge is not None:
+            assert self.W_amb is not None, "sponge needs W_amb"
+            self.sponge = sponge.to(**kw)
+            self.U_amb = prim_to_cons(self.W_amb[:, None, None], gamma)
         self.U: torch.Tensor | None = None
         # Time is accumulated in float64 even for float32 fields; otherwise
         # t + (t_end - t) can round below t_end and the run never terminates.
@@ -310,6 +318,8 @@ class EulerSolver2D:
             dU[2] = dU[2] + W[3] / self.r_c                             # radial pressure force p/r
         else:
             dU = dU - (G[:, 1:] - G[:, :-1]) / self.dy
+        if self.sponge is not None:
+            dU = dU - self.sponge * (U - self.U_amb)
         return dU
 
     def _max_dt_impl(self, U: torch.Tensor, cfl: float) -> torch.Tensor:

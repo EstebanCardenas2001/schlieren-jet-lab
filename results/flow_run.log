@@ -1,32 +1,29 @@
-  NPR=  5.0 start-up done: t=5.67, 2350 steps, 30.1 s
-  NPR=  5.0 t=  10.21 steps=  4180 window-avg core drho median=8.1e-03 p90=3.9e-02
-  NPR=  5.0 t=  12.47 steps=  5140 window-avg core drho median=1.4e-02 p90=4.9e-02
-  NPR=  5.0 t=  14.74 steps=  6170 window-avg core drho median=9.6e-03 p90=3.6e-02
-  NPR=  5.0 t=  17.01 steps=  7160 window-avg core drho median=2.3e-02 p90=7.4e-02
-  NPR=  5.0 t=  19.28 steps=  8200 window-avg core drho median=3.0e-02 p90=1.4e-01
-NPR 5: 240x120 cells, 8200 steps, 36.2 s, converged=False -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr5.npz
-  NPR= 10.0 start-up done: t=5.67, 2475 steps, 2.4 s
-  NPR= 10.0 t=  10.21 steps=  4455 window-avg core drho median=1.1e-04 p90=2.7e-02
-NPR 10: 240x120 cells, 4455 steps, 4.4 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr10.npz
-  NPR= 15.0 start-up done: t=6.38, 2850 steps, 26.9 s
-  NPR= 15.0 t=  11.48 steps=  5150 window-avg core drho median=5.0e-04 p90=4.6e-02
-NPR 15: 270x135 cells, 5150 steps, 29.3 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr15.npz
-  NPR= 20.0 start-up done: t=7.36, 3300 steps, 29.0 s
-  NPR= 20.0 t=  13.25 steps=  5950 window-avg core drho median=2.2e-04 p90=1.1e-01
-NPR 20: 312x156 cells, 5950 steps, 31.9 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr20.npz
-  NPR= 30.0 start-up done: t=9.02, 4100 steps, 6.2 s
-  NPR= 30.0 t=  16.23 steps=  7390 window-avg core drho median=2.2e-04 p90=1.9e-01
-NPR 30: 382x191 cells, 7390 steps, 9.6 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr30.npz
-  NPR= 45.0 start-up done: t=11.04, 5075 steps, 29.8 s
-  NPR= 45.0 t=  19.88 steps=  9235 window-avg core drho median=1.6e-04 p90=2.1e-01
-NPR 45: 467x234 cells, 9235 steps, 35.0 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr45.npz
-  NPR= 60.0 start-up done: t=12.75, 5925 steps, 34.4 s
-  NPR= 60.0 t=  22.95 steps= 10985 window-avg core drho median=5.4e-05 p90=1.8e-01
-NPR 60: 540x270 cells, 10985 steps, 43.2 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr60.npz
-  NPR= 80.0 start-up done: t=14.72, 6925 steps, 41.9 s
-  NPR= 80.0 t=  26.50 steps= 12845 window-avg core drho median=2.0e-05 p90=8.5e-02
-NPR 80: 623x312 cells, 12845 steps, 57.2 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr80.npz
-  NPR=100.0 start-up done: t=16.46, 7825 steps, 48.2 s
-  NPR=100.0 t=  29.63 steps= 14585 window-avg core drho median=1.9e-05 p90=4.0e-01
-NPR 100: 697x348 cells, 14585 steps, 70.4 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr100.npz
+  NPR=  5.0 start-up done: t=5.67, 2325 steps, 29.3 s
+  NPR=  5.0 t=  19.28 steps=  8005 window-avg core drho median=1.2e-03 p90=4.0e-03
+  NPR=  5.0 t=  26.08 steps= 10945 window-avg core drho median=5.0e-04 p90=2.2e-03
+NPR 5: 240x120 cells, 10945 steps, 38.6 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr5.npz
+  NPR= 10.0 start-up done: t=5.67, 2475 steps, 2.6 s
+  NPR= 10.0 t=  19.28 steps=  8445 window-avg core drho median=5.4e-05 p90=2.6e-02
+NPR 10: 240x120 cells, 8445 steps, 8.8 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr10.npz
+  NPR= 15.0 start-up done: t=6.38, 2825 steps, 28.1 s
+  NPR= 15.0 t=  21.68 steps=  9615 window-avg core drho median=5.3e-05 p90=4.0e-02
+NPR 15: 270x135 cells, 9615 steps, 35.2 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr15.npz
+  NPR= 20.0 start-up done: t=7.36, 3300 steps, 29.7 s
+  NPR= 20.0 t=  25.03 steps= 11280 window-avg core drho median=7.9e-05 p90=4.2e-02
+NPR 20: 312x156 cells, 11280 steps, 38.8 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr20.npz
+  NPR= 30.0 start-up done: t=9.02, 4125 steps, 6.2 s
+  NPR= 30.0 t=  30.65 steps= 13995 window-avg core drho median=4.9e-05 p90=4.7e-02
+NPR 30: 382x191 cells, 13995 steps, 16.4 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr30.npz
+  NPR= 45.0 start-up done: t=11.04, 5125 steps, 30.7 s
+  NPR= 45.0 t=  37.54 steps= 17625 window-avg core drho median=2.5e-05 p90=3.9e-02
+NPR 45: 467x234 cells, 17625 steps, 45.3 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr45.npz
+  NPR= 60.0 start-up done: t=12.75, 5950 steps, 34.5 s
+  NPR= 60.0 t=  43.35 steps= 20900 window-avg core drho median=1.7e-05 p90=3.1e-02
+NPR 60: 540x270 cells, 20900 steps, 58.6 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr60.npz
+  NPR= 80.0 start-up done: t=14.72, 6875 steps, 40.7 s
+  NPR= 80.0 t=  50.06 steps= 24415 window-avg core drho median=1.3e-05 p90=3.5e-02
+NPR 80: 623x312 cells, 24415 steps, 83.0 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr80.npz
+  NPR=100.0 start-up done: t=16.46, 7700 steps, 49.1 s
+  NPR=100.0 t=  55.97 steps= 27360 window-avg core drho median=1.2e-05 p90=3.2e-02
+NPR 100: 697x348 cells, 27360 steps, 108.4 s, converged=True -> /home/ubuntu/schlieren-jet-lab/results/flow/jet_npr100.npz
 wrote /home/ubuntu/schlieren-jet-lab/results/figures/jet_overview.png

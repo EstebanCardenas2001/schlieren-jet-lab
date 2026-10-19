@@ -14,10 +14,16 @@ Physics / setup (non-dimensional)
   it expands through a Prandtl-Meyer fan at the lip, overshoots, and the
   reflected compression waves coalesce into a barrel shock that ends, at high
   NPR, in a normal shock (the Mach disk).
-* Geometry: axisymmetric (x, r), with the exit plane at x = 0 in a flat wall
-  (orifice-in-a-wall, as in the free-jet experiments behind the
-  Ashkenas-Sherman correlation). Bottom = axis, top/right = ambient-pressure
-  boundaries.
+* Geometry: axisymmetric (x, r), exit plane at x = 0. The nozzle is treated
+  as thin-lipped: outside r = D/2 the left boundary is open (Riemann-invariant
+  far field), like the top and right boundaries, so ambient gas can be
+  entrained from upstream. Bottom = axis.
+* Sponge layer: in the outer 40 % of the radius the solution is relaxed
+  towards the quiescent ambient state. Without it (and with a closed back
+  wall, as in a first version) slow vortices and entropy blobs from the
+  start-up stay trapped in the ambient gas. Their sharp edges project into
+  vertical lines in synthetic Schlieren images that look like normal shocks.
+  A real chamber removes them by turbulent mixing, which Euler lacks.
 * Inviscid Euler: no viscosity, so there is no physical mixing layer and the
   jet shear layer rolls up through numerical (grid) instabilities only.
   The *near field* (expansion, barrel shock, Mach disk, first cells) is
@@ -50,6 +56,8 @@ from .euler import GAMMA, EulerSolver2D, cons_to_prim, mach_number
 ROOT = Path(__file__).resolve().parents[1]
 FULL_NPRS = [5, 10, 15, 20, 30, 45, 60, 80, 100]
 FAST_NPRS = [10, 40]
+SPONGE_STRENGTH = 1.0  # peak relaxation rate, in units of sqrt(p_a/rho_a)/D
+WINDOW_TRANSITS = 3.0  # averaging window, in jet transit times Lx/u_max
 
 
 def sonic_exit_state(npr: float, g: float = GAMMA) -> dict:
@@ -83,16 +91,19 @@ def simulate(npr: float, cells_per_d: int, device: str, dtype=torch.float32,
     if compile is None:
         compile = torch.device(device).type == "cuda"
     r_cells = (torch.arange(ny) + 0.5) * h
+    r_s = 0.6 * Lr
+    ramp = ((r_cells - r_s) / (Lr - r_s)).clamp(min=0.0)
+    sponge = SPONGE_STRENGTH * (ramp ** 2)[:, None].expand(ny, nx)
     s = EulerSolver2D(nx, ny, h, h, axisymmetric=True,
-                      bc={"left": "reflect", "right": "farfield", "bottom": "reflect", "top": "farfield"},
+                      bc={"left": "farfield", "right": "farfield", "bottom": "reflect", "top": "farfield"},
                       W_amb=W_amb, inflow=("left", r_cells < 0.5, W_in),  # nozzle exit r < D/2
-                      limiter=limiter, device=device, dtype=dtype, compile=compile)
+                      sponge=sponge, limiter=limiter, device=device, dtype=dtype, compile=compile)
     W0 = W_amb.to(s.device, dtype)[:, None, None].expand(4, ny, nx).clone()
     s.set_initial(W0)
 
     # Time scales from the fully expanded jet speed u_max = sqrt(2 g T0/(g-1)).
     # 1) start-up: let the starting vortex (moving at roughly 0.4 u_max) leave the domain;
-    # 2) average the fields over windows of one jet transit time Lx/u_max.
+    # 2) average the fields over windows of WINDOW_TRANSITS jet transit times Lx/u_max.
     # Only the supersonic core upstream of the Mach disk (expansion fan, barrel
     # shock) becomes truly steady; the Mach disk itself oscillates axially by a
     # few percent and the subsonic flow behind it and the inviscid shear layer
@@ -107,7 +118,7 @@ def simulate(npr: float, cells_per_d: int, device: str, dtype=torch.float32,
     # analysis stage measures the Mach-disk jitter.
     u_max = math.sqrt(2 * g / (g - 1))
     t_start = Lx / (0.4 * u_max)
-    window = Lx / u_max
+    window = WINDOW_TRANSITS * Lx / u_max
     x_md_guess = 0.67 * math.sqrt(npr)  # region selection only
     box = (s.x[None, :] < 0.8 * x_md_guess) & (s.y[:, None] < 0.45 * x_md_guess + 0.5)
     t0 = time.time()
@@ -157,7 +168,8 @@ def simulate(npr: float, cells_per_d: int, device: str, dtype=torch.float32,
         "rho_frames": frames,
         "meta": {
             "npr": npr, "gamma": g, "D": 1.0, "cells_per_d": cells_per_d, "nx": nx, "ny": ny,
-            "Lx": Lx, "Lr": Lr, "geometry": "axisymmetric (x, r); r=0 is the axis",
+            "Lx": Lx, "Lr": Lr, "geometry": "axisymmetric (x, r); r=0 is the axis; thin-lipped nozzle, open back boundary",
+            "sponge": {"r_start": r_s, "strength": SPONGE_STRENGTH},
             "units": "non-dimensional: rho/rho_a, p/p_a, velocities / sqrt(p_a/rho_a), lengths / D",
             "fields": "rho/u/v/p/mach: time average over the last window; rho_frames: snapshots in it",
             "exit_state": ex, "t_start": t_start, "window": window, "t_final": s.t.item(),
