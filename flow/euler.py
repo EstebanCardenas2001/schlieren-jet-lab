@@ -150,9 +150,7 @@ class EulerSolver2D:
     Boundary conditions are given per side ("left", "right", "bottom", "top"):
       "outflow"  zero-gradient extrapolation
       "reflect"  slip wall / symmetry plane / axis
-      "pressure" characteristic-style ambient boundary: outgoing subsonic flow
-                 sees p = p_amb, incoming flow takes ambient rho and p,
-                 supersonic outflow is extrapolated
+      "farfield" Riemann-invariant boundary to the quiescent state W_amb
     `inflow = (side, mask, W_in)` overrides the ghost cells of that side where
     `mask` (length of that side) is True with the fixed primitive state W_in
     (a supersonic / sonic inflow, e.g. a nozzle exit).
@@ -167,7 +165,8 @@ class EulerSolver2D:
                  limiter: str = "minmod",
                  gamma: float = GAMMA,
                  device: str | torch.device = "cpu",
-                 dtype: torch.dtype = torch.float64):
+                 dtype: torch.dtype = torch.float64,
+                 compile: bool = False):
         self.nx, self.ny, self.dx, self.dy = nx, ny, dx, dy
         self.gamma, self.limiter = gamma, limiter
         self.axisymmetric = axisymmetric
@@ -189,8 +188,14 @@ class EulerSolver2D:
             inflow = (side, mask.to(self.device), W_in.to(**kw))
         self.inflow = inflow
         self.U: torch.Tensor | None = None
-        self.t = torch.zeros((), **kw)
+        # Time is accumulated in float64 even for float32 fields; otherwise
+        # t + (t_end - t) can round below t_end and the run never terminates.
+        self.t = torch.zeros((), device=self.device, dtype=torch.float64)
         self.nsteps = 0
+        # torch.compile fuses the few hundred small elementwise kernels of one RK
+        # step; without it the GPU is launch-bound (~10 ms/step at any grid size).
+        self._advance = torch.compile(self._rk2, dynamic=False) if compile else self._rk2
+        self._max_dt = torch.compile(self._max_dt_impl, dynamic=False) if compile else self._max_dt_impl
 
     # -------------------------------------------------------------- setup --
     def set_initial(self, W: torch.Tensor) -> None:
@@ -223,26 +228,51 @@ class EulerSolver2D:
                 Wp[(normal,) + sl(ghost)[1:]] *= -1.0
             else:
                 Wp[sl(ghost)] = Wp[sl(first)]
-        if kind == "pressure":
-            assert self.W_amb is not None, "pressure boundary needs W_amb"
-            rho_a, p_a = self.W_amb[0], self.W_amb[3]
+        if kind == "farfield":
+            Wb = self._farfield_state(Wp[sl(first)], normal, -step)
             for k in range(g):
-                ghost = first - step * (k + 1)
-                Wg = Wp[sl(ghost)]
-                un_out = -step * Wg[normal]               # outward normal velocity
-                c = torch.sqrt(self.gamma * Wg[3] / Wg[0])
-                incoming = un_out < 0
-                subsonic_out = (~incoming) & (un_out < c)
-                Wg[3] = torch.where(incoming | subsonic_out, p_a, Wg[3])
-                Wg[0] = torch.where(incoming, rho_a, Wg[0])
+                Wp[sl(first - step * (k + 1))] = Wb
         if self.inflow is not None and self.inflow[0] == side:
             _, mask, W_in = self.inflow
             for k in range(g):
                 ghost = first - step * (k + 1)
                 Wg = Wp[sl(ghost)]
-                inner = slice(g, g + mask.numel())        # interior span along the side
+                off = 0 if dim == 2 else g                # x sides get a view of interior rows only
+                inner = slice(off, off + mask.numel())    # interior span along the side
                 seg = Wg[:, inner]
                 seg[:] = torch.where(mask[None, :], W_in[:, None], seg)
+
+    def _farfield_state(self, Wi: torch.Tensor, normal: int, out_sign: int) -> torch.Tensor:
+        """Riemann-invariant far-field state (e.g. Blazek, CFD Principles, sec. 8.2).
+
+        Subsonic: the outgoing invariant R+ = u_n + 2c/(g-1) comes from the
+        interior, the incoming R- = u_n - 2c/(g-1) from the ambient gas at rest.
+        Entropy and tangential velocity are taken from upwind: interior on
+        outflow, ambient on inflow. Supersonic outflow is extrapolated.
+        This lets waves leave with little reflection and pins the far field to
+        the ambient state without imposing the velocity.
+        """
+        assert self.W_amb is not None, "farfield boundary needs W_amb"
+        g = self.gamma
+        rho_a, p_a = self.W_amb[0], self.W_amb[3]
+        c_a = torch.sqrt(g * p_a / rho_a)
+        tang = 3 - normal
+        un_i = out_sign * Wi[normal]
+        c_i = torch.sqrt(g * Wi[3] / Wi[0])
+        R_out = un_i + 2.0 * c_i / (g - 1.0)
+        R_in = -2.0 * c_a / (g - 1.0)
+        un_b = 0.5 * (R_out + R_in)
+        c_b = 0.25 * (g - 1.0) * (R_out - R_in)
+        outflow = un_b > 0
+        s_b = torch.where(outflow, Wi[3] / Wi[0] ** g, p_a / rho_a ** g)  # entropy p/rho^g
+        rho_b = (c_b * c_b / (g * s_b)) ** (1.0 / (g - 1.0))
+        Wb = torch.empty_like(Wi)
+        Wb[0] = rho_b
+        Wb[normal] = out_sign * un_b
+        Wb[tang] = torch.where(outflow, Wi[tang], torch.zeros_like(un_b))
+        Wb[3] = rho_b * c_b * c_b / g
+        supersonic_out = un_i >= c_i
+        return torch.where(supersonic_out[None], Wi, Wb)
 
     def pad(self, W: torch.Tensor) -> torch.Tensor:
         g = NG
@@ -282,29 +312,34 @@ class EulerSolver2D:
             dU = dU - (G[:, 1:] - G[:, :-1]) / self.dy
         return dU
 
-    def max_dt(self, cfl: float) -> torch.Tensor:
-        W = cons_to_prim(self.U, self.gamma)
+    def _max_dt_impl(self, U: torch.Tensor, cfl: float) -> torch.Tensor:
+        W = cons_to_prim(U, self.gamma)
         c = sound_speed(W, self.gamma)
         rate = ((W[1].abs() + c) / self.dx + (W[2].abs() + c) / self.dy).max()
         return cfl / rate
 
+    def max_dt(self, cfl: float) -> torch.Tensor:
+        return self._max_dt(self.U, cfl)
+
     # ------------------------------------------------------------ stepping --
-    def step(self, dt: torch.Tensor) -> None:
+    def _rk2(self, U0: torch.Tensor, dt: torch.Tensor) -> torch.Tensor:
         """One SSP-RK2 (Heun) step."""
-        U0 = self.U
         U1 = U0 + dt * self.rhs(U0)
-        self.U = 0.5 * U0 + 0.5 * (U1 + dt * self.rhs(U1))
-        self.t = self.t + dt
+        return 0.5 * U0 + 0.5 * (U1 + dt * self.rhs(U1))
+
+    def step(self, dt: torch.Tensor) -> None:
+        self.U = self._advance(self.U, dt.to(self.dtype))
+        self.t = self.t + dt.to(torch.float64)
         self.nsteps += 1
 
     def run(self, t_end: float, cfl: float = 0.4, check_every: int = 25,
             callback: Callable[["EulerSolver2D"], None] | None = None,
             max_steps: int | None = None) -> None:
         """Advance to exactly t_end. Only syncs with the host every `check_every` steps."""
-        t_end_t = torch.tensor(t_end, device=self.device, dtype=self.dtype)
+        t_end_t = torch.tensor(t_end, device=self.device, dtype=torch.float64)
         while True:
             for _ in range(check_every):
-                dt = torch.minimum(self.max_dt(cfl), t_end_t - self.t).clamp(min=0.0)
+                dt = torch.minimum(self.max_dt(cfl).double(), t_end_t - self.t).clamp(min=0.0)
                 self.step(dt)
             if callback is not None:
                 callback(self)

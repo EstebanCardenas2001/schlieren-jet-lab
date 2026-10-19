@@ -1,0 +1,101 @@
+[
+  {
+    "npr": 5,
+    "nx": 240,
+    "ny": 120,
+    "cells_per_d": 40,
+    "t_final": 19.27618812347059,
+    "steps": 8200,
+    "runtime_s": 36.195043087005615,
+    "converged": false,
+    "final_core_avg_rel_change": 0.030160758644342422
+  },
+  {
+    "npr": 10,
+    "nx": 240,
+    "ny": 120,
+    "cells_per_d": 40,
+    "t_final": 10.205040771249134,
+    "steps": 4455,
+    "runtime_s": 4.400930166244507,
+    "converged": true,
+    "final_core_avg_rel_change": 0.0001089832148863934
+  },
+  {
+    "npr": 15,
+    "nx": 270,
+    "ny": 135,
+    "cells_per_d": 40,
+    "t_final": 11.475121007765328,
+    "steps": 5150,
+    "runtime_s": 29.331110954284668,
+    "converged": true,
+    "final_core_avg_rel_change": 0.0004960033111274242
+  },
+  {
+    "npr": 20,
+    "nx": 312,
+    "ny": 156,
+    "cells_per_d": 40,
+    "t_final": 13.250328405633685,
+    "steps": 5950,
+    "runtime_s": 31.901187896728516,
+    "converged": true,
+    "final_core_avg_rel_change": 0.00022224329586606473
+  },
+  {
+    "npr": 30,
+    "nx": 382,
+    "ny": 191,
+    "cells_per_d": 40,
+    "t_final": 16.228271759054145,
+    "steps": 7390,
+    "runtime_s": 9.567546129226685,
+    "converged": true,
+    "final_core_avg_rel_change": 0.00021955637203063816
+  },
+  {
+    "npr": 45,
+    "nx": 467,
+    "ny": 234,
+    "cells_per_d": 40,
+    "t_final": 19.87549260845052,
+    "steps": 9235,
+    "runtime_s": 34.98632311820984,
+    "converged": true,
+    "final_core_avg_rel_change": 0.0001647213939577341
+  },
+  {
+    "npr": 60,
+    "nx": 540,
+    "ny": 270,
+    "cells_per_d": 40,
+    "t_final": 22.950242015530655,
+    "steps": 10985,
+    "runtime_s": 43.1624219417572,
+    "converged": true,
+    "final_core_avg_rel_change": 5.4362681112252176e-05
+  },
+  {
+    "npr": 80,
+    "nx": 623,
+    "ny": 312,
+    "cells_per_d": 40,
+    "t_final": 26.50065681126737,
+    "steps": 12845,
+    "runtime_s": 57.2032368183136,
+    "converged": true,
+    "final_core_avg_rel_change": 2.048658461717423e-05
+  },
+  {
+    "npr": 100,
+    "nx": 697,
+    "ny": 348,
+    "cells_per_d": 40,
+    "t_final": 29.628635039193323,
+    "steps": 14585,
+    "runtime_s": 70.42564463615417,
+    "converged": true,
+    "final_core_avg_rel_change": 1.9278197214589454e-05
+  }
+]
