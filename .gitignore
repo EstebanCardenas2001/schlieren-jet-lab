@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 results/**/*.npz
+results/experiment/**/recording.mkv
+results/experiment/pattern.png

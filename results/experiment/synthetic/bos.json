@@ -1,0 +1,49 @@
+{
+  "video": "/home/ubuntu/schlieren-jet-lab/results/experiment/synthetic/recording.mkv",
+  "ref": [
+    0,
+    20
+  ],
+  "flow": [
+    20,
+    null
+  ],
+  "roi": null,
+  "cc_window": 24,
+  "methods": {
+    "cc": {
+      "method": "cc",
+      "n_ref": 20,
+      "n_flow": 40,
+      "p99_mean_displacement_px": 0.6474997596566495,
+      "max_mean_displacement_px": 0.9682866009379705,
+      "noise_floor_frame_px": 0.004092262481577149,
+      "noise_floor_mean_px": 0.0006470435112518316,
+      "snr_p99": 1000.7051278575303,
+      "camera_shake_rms_px": 0.0635141600448692,
+      "runtime_s": 9.20281457901001,
+      "vs_truth": {
+        "rms_error_px": 0.00952353549881248,
+        "p99_error_px": 0.045678275428983096,
+        "true_peak_px": 0.8913806301211412
+      }
+    },
+    "flow": {
+      "method": "flow",
+      "n_ref": 20,
+      "n_flow": 40,
+      "p99_mean_displacement_px": 0.5581549799877014,
+      "max_mean_displacement_px": 0.7642945490398927,
+      "noise_floor_frame_px": 0.005081467926844222,
+      "noise_floor_mean_px": 0.0008034506252960806,
+      "snr_p99": 694.6972998894798,
+      "camera_shake_rms_px": 0.0877916056592508,
+      "runtime_s": 3.4483463764190674,
+      "vs_truth": {
+        "rms_error_px": 0.023008365798084948,
+        "p99_error_px": 0.09523171014217467,
+        "true_peak_px": 0.9366238845557145
+      }
+    }
+  }
+}

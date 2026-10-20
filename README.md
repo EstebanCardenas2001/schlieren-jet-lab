@@ -9,8 +9,8 @@ Simulated underexpanded jet → synthetic Schlieren images → automated shock m
 | 1. Flow solver (`flow/`) | ✅ done |
 | 2. Synthetic Schlieren (`optics/`) | ✅ done |
 | 3. Shock analysis (`analysis/`) | ✅ done |
-| 4. BOS experiment (`experiment/`) | ⏳ next |
-| 5. Packaging, CI, final README | ☐ |
+| 4. BOS experiment (`experiment/`) | ✅ code + synthetic validation done; real footage pending |
+| 5. Packaging, CI, final README | ⏳ next |
 
 Every number below is copied from a file in `results/` that a script writes; the file is named next to each number.
 
@@ -19,11 +19,12 @@ Every number below is copied from a file in `results/` that a script writes; the
 
 ```bash
 uv venv && uv pip install -r requirements.txt
-python -m pytest tests     # 22 tests, ~12 s on CPU
+python -m pytest tests     # 30 tests, ~13 s on CPU
 python -m flow.sod         # Sod validation         -> results/sod_metrics.json, figures/sod.png
 python -m flow.jet         # NPR sweep, GPU ~7 min  -> results/flow/*.npz, figures/jet_overview.png
 python -m optics.render    # synthetic images ~1 min -> results/optics/*, figures/optics_*.png
 python -m analysis.run     # shock measurement ~8 s -> results/analysis/shock_metrics.json, figures
+python -m experiment.bos --synthetic   # BOS pipeline on a synthetic recording ~15 s
 ```
 `--fast` on `flow.jet` / `optics.render` / `analysis.run` runs a small CPU-sized version (used by CI later).
 
@@ -171,10 +172,73 @@ Results (`results/analysis/shock_metrics.json`):
 
 ![shock cells](results/figures/shock_cells.png)
 
+## Stage 4: home BOS experiment (`experiment/`)
+
+A small real background-oriented Schlieren (BOS) setup for a **subsonic demonstration**: a heat-gun plume or a gas-duster jet in front of a printed dot pattern. **It is not a supersonic measurement.** BOS uses the physics of stages 1–3 in reverse: a camera focused on a random background behind the flow sees the background shift by Δ = Z_D·ε, where ε = ∇OPD is the same ray deflection that the synthetic Schlieren images were built from.
+
+**Pieces:**
+- **Background** ([experiment/pattern.py](experiment/pattern.py)): a random-dot pattern at exact physical size. The A4 version with 0.5 mm dots, 40% coverage, is in `results/experiment/pattern.pdf`; print it at 100% ("actual size").
+  - Choose the dot size so each dot covers about 2–3 camera pixels: dot_mm ≈ 2.5 × (background width in mm)/(image width in px).
+  - Smaller dots lock the sub-pixel estimate onto integer pixels; larger dots blunt the correlation peak.
+- **Displacement** ([experiment/processing.py](experiment/processing.py)), two methods:
+  1. **Window cross-correlation:** 24 px windows with 50% overlap, FFT-based, three-point Gaussian sub-pixel peak fit, and normalised-median outlier replacement, followed by 2 passes of iterative image deformation. A single pass underestimates shifts by up to 0.05 px (loss of pairs at window edges); the deformation passes remove that bias.
+  2. **OpenCV Farnebäck dense optical flow.**
+- **One command** ([experiment/bos.py](experiment/bos.py)) records from a webcam or loads a video, then:
+  - averages the reference frames;
+  - compares every flow frame against that mean and removes camera shake as the field-median shift;
+  - writes the time-mean displacement, its rms fluctuation, and a **noise floor measured on the reference frames themselves** (leave-one-out, no flow).
+- **Design calculator** ([experiment/design.py](experiment/design.py)) predicts the shift for a hot plume, reusing the stage 2 Gladstone–Dale and Abel code.
+  - For a Gaussian index profile the peak deflection is ε_max = √(2π)·e^(−1/2)·|Δn₀| ≈ 1.52·|Δn₀|, independent of the plume width (tested).
+
+![dot pattern crop](results/figures/bos_pattern_crop.png)
+*30 × 20 mm crop of the printable pattern (0.5 mm dots).*
+
+**Expected signal** (`results/experiment/design.json`): Z_D = 0.5 m between plume and background, 0.2 mm of background per pixel (≈ 400 mm field on a 1920 px sensor), and a plume with a Gaussian temperature excess ΔT.
+
+| ΔT [K] | peak deflection [µrad] | background shift [µm] | shift [px] |
+|---:|---:|---:|---:|
+| 10 | 13.7 | 6.9 | 0.03 |
+| 20 | 26.7 | 13.3 | 0.07 |
+| 50 | 61.7 | 30.8 | 0.15 |
+| 100 | 109.9 | 55.0 | 0.27 |
+| 200 | 181.7 | 90.9 | 0.45 |
+
+A heat-gun plume therefore shifts the background by only a few tenths of a pixel. That makes sub-pixel accuracy, frame averaging and the measured noise floor the essential parts of the pipeline.
+
+**Validation on a synthetic recording** (`python -m experiment.bos --synthetic` → `results/experiment/synthetic/bos.json`).
+- **Input:** 20 reference and 40 flow frames, 480 × 360 px, saved as lossless FFV1 video and processed through the same video path as real footage. The flow is a swaying plume-like displacement field (true time-mean peak about 0.9 px), with 1% sensor noise and 0.05 px rms random camera jitter per axis.
+
+| method | rms error of time-mean field [px] | 99th-pct error [px] | random noise floor, single frame [px] | camera shake removed (rms) [px] | runtime [s] |
+|---|---:|---:|---:|---:|---:|
+| cross-correlation | 0.0095 | 0.046 | 0.0041 | 0.064 | 9.2 |
+| Farnebäck flow | 0.023 | 0.095 | 0.0051 | 0.088 | 3.4 |
+
+![BOS synthetic](results/experiment/synthetic/bos.png)
+
+- **Error budget:** the error against the truth is larger than the random noise floor because it also contains a systematic part, the window averaging of a field that varies on the window scale. The noise floor reported for real footage is therefore a *lower bound* on the error.
+- **Tests** ([tests/test_experiment.py](tests/test_experiment.py)):
+  - uniform sub-pixel shifts of 0.3 and 1.7 px are recovered to 0.01 px with cross-correlation and 0.06 px with Farnebäck;
+  - the plume field is recovered;
+  - outlier replacement and shake removal work;
+  - the full video pipeline runs end to end;
+  - the Gaussian-plume deflection formula holds.
+- **Window size:** the 24 px default was chosen after 32 px windows gave 2–5× larger errors on narrow plumes.
+
+**Running it at home:**
+```bash
+python -m experiment.pattern --dot-mm 0.5            # print results/experiment/pattern.pdf at 100 %
+python -m experiment.design --zd 0.5 --footprint-mm 0.2   # expected signal for your geometry
+python -m experiment.bos --camera 0 --ref-seconds 2 --flow-seconds 5 --name heatgun   # webcam
+python -m experiment.bos --video phone.mp4 --ref 0:30 --flow 90: --name heatgun       # phone video
+```
+- **Camera setup:** tripod; focus locked on the pattern; exposure and white balance locked (phone "pro" mode or AE/AF lock); flow about 0.5 m in front of the pattern; small aperture so the plume isn't too blurred.
+- **Safety:** keep the heat gun's hot nozzle away from the paper. "Compressed-air" dusters usually contain a refrigerant gas (often flammable), not air: use them away from heat sources and ventilate.
+
 ## Known limitations so far
 - **Euler only:** no viscosity, turbulence or condensation. The shear layer is resolved only by the grid, and the far field isn't physical.
 - **Continuum assumption:** questionable below about 7 mbar ambient at D = 1 mm (see above).
 - **Grid convergence of the jet:** not yet quantified, only one resolution (40 cells per D).
 - **Optics:** paraxial, thin-phase-object approximation. The knife is ideal (no lens aberrations), and the camera model has noise and quantisation but no blur.
 - **Shock analysis:** the Mach-disk oscillation is that of an *inviscid* simulation, so the jitter term is model-dependent. The shock-cell spacing is fragile: frames disagree by 10–30%, and it's undetected at NPR 10 and 100.
+- **BOS experiment:** so far validated only on synthetic data. The webcam recording path couldn't be exercised on this headless VM (no camera), while the video-file path is tested. Real footage is still pending.
 - **Gas:** air only; real lithography-tool jets may use other gases (K and γ differ).
