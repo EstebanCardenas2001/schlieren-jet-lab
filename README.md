@@ -8,20 +8,24 @@ Simulated underexpanded jet → synthetic Schlieren images → automated shock m
 |---|---|
 | 1. Flow solver (`flow/`) | ✅ done |
 | 2. Synthetic Schlieren (`optics/`) | ✅ done |
-| 3. Shock analysis (`analysis/`) | ⏳ next |
-| 4. BOS experiment (`experiment/`) | ☐ |
+| 3. Shock analysis (`analysis/`) | ✅ done |
+| 4. BOS experiment (`experiment/`) | ⏳ next |
 | 5. Packaging, CI, final README | ☐ |
 
 Every number below is copied from a file in `results/` that a script writes; the file is named next to each number.
 
+![headline: density | Schlieren | detected shocks](results/figures/headline.png)
+*NPR 30 jet at p_a = 67 mbar. Left: CFD density. Middle: synthetic knife-edge Schlieren through an 8-bit camera model. Right: the Mach disk and downstream compressions found automatically in that image.*
+
 ```bash
 uv venv && uv pip install -r requirements.txt
-python -m pytest tests     # 17 tests, ~10 s on CPU
+python -m pytest tests     # 22 tests, ~12 s on CPU
 python -m flow.sod         # Sod validation         -> results/sod_metrics.json, figures/sod.png
 python -m flow.jet         # NPR sweep, GPU ~7 min  -> results/flow/*.npz, figures/jet_overview.png
 python -m optics.render    # synthetic images ~1 min -> results/optics/*, figures/optics_*.png
+python -m analysis.run     # shock measurement ~8 s -> results/analysis/shock_metrics.json, figures
 ```
-`--fast` on `flow.jet` / `optics.render` runs a small CPU-sized version (used by CI later).
+`--fast` on `flow.jet` / `optics.render` / `analysis.run` runs a small CPU-sized version (used by CI later).
 
 ---
 
@@ -111,9 +115,66 @@ The lowest detectable ambient pressures (`results/optics/contrast_vs_pressure.js
 
 ![contrast vs pressure](results/figures/optics_contrast.png)
 
+## Stage 3: shock analysis (`analysis/`)
+
+The measurement uses only the synthetic Schlieren images, never the CFD fields.
+
+**Camera model:** 8-bit sensor, background at 128 counts, 1% rms noise, saturation at 255.
+
+**Detector** ([analysis/shocks.py](analysis/shocks.py)). With a vertical knife, a compression (density rising along x) appears bright and the expansion core appears dark.
+- **Mach disk:** the first significant bright peak in a centreline band |y| ≤ 0.1 D. Significance means prominence above 5× the band noise (estimated robustly from the image background) and at least 20% of the strongest peak. A parabolic fit gives the sub-pixel position.
+- **Shock cells:** behind the Mach disk the axis carries a subsonic mixing core, and the cells live in the supersonic annulus around it. They're searched for as bright bands in a band as wide as the jet, |y| ≤ 0.4·x_md.
+
+**Estimator and uncertainty** ([analysis/run.py](analysis/run.py)).
+- The simulated Mach disk oscillates axially, by up to about 0.8 D peak to peak at NPR 80–100. The reported position is therefore the **mean over the 8 short-exposure frames**, as from a high-speed camera.
+  - In a long-exposure (time-averaged) image of such a smeared, sometimes bimodal disk, the brightest point can sit at one end of its travel: 5.43 D instead of 5.82 D at NPR 80. That value is kept only as a secondary column in the JSON.
+- The 1σ error bar combines three terms in quadrature:
+  - **noise:** spread over 20 camera-noise realisations;
+  - **jitter:** the full frame-to-frame spread, not the standard error of the mean, so it's conservative;
+  - **grid:** one CFD cell, D/40, since a captured shock is about 2 cells wide.
+- **Cell spacing** (Mach disk → first downstream compression) uses the median over frames, with jitter = 1.4826·MAD. It's reported only if found in at least 75% of frames with relative jitter below 0.3.
+- **Detection rate:** the Mach disk was found in 100% of noise realisations and frames at every NPR, with a median peak signal-to-noise ratio of at least 21.
+
+**Validation:**
+- **Unit tests** ([tests/test_analysis.py](tests/test_analysis.py)):
+  - A toy axisymmetric jet with a normal shock at a known position, rendered through the full Abel → Schlieren → camera chain, is located to within 0.011 D (under half a pixel).
+  - Synthetic shock-cell bands are recovered.
+  - Pure noise yields no detection.
+- **CFD cross-check, not used as a result:** the steepest axial density rise on the axis, averaged over the same frames, agrees with the image measurement to within 1.2% at every NPR.
+
+Results (`results/analysis/shock_metrics.json`):
+
+| NPR | p_a [mbar] | x_md/D (Schlieren) | σ noise / jitter / grid | A–S 0.67√NPR | measured / A–S | CFD cross-check | first cell spacing / D | Prandtl–Pack / D |
+|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 5 | 400.0 | 1.37 ± 0.03 | 0.000 / 0.024 / 0.025 | 1.50 | 0.915 | 1.36 | 1.41 ± 0.28 | 2.10 |
+| 10 | 200.0 | 2.03 ± 0.08 | 0.001 / 0.075 / 0.025 | 2.12 | 0.960 | 2.05 | not detected | 3.47 |
+| 15 | 133.3 | 2.51 ± 0.08 | 0.001 / 0.077 / 0.025 | 2.59 | 0.966 | 2.54 | 1.36 ± 0.13 | 4.49 |
+| 20 | 100.0 | 2.91 ± 0.10 | 0.002 / 0.093 / 0.025 | 3.00 | 0.971 | 2.94 | 1.04 ± 0.24 | 5.34 |
+| 30 | 66.7 | 3.62 ± 0.08 | 0.003 / 0.079 / 0.025 | 3.67 | 0.987 | 3.66 | 1.75 ± 0.10 | 6.77 |
+| 45 | 44.4 | 4.48 ± 0.10 | 0.004 / 0.096 / 0.025 | 4.49 | 0.996 | 4.52 | 2.06 ± 0.24 | 8.52 |
+| 60 | 33.3 | 5.13 ± 0.10 | 0.006 / 0.097 / 0.025 | 5.19 | 0.988 | 5.17 | 1.89 ± 0.32 | 10.00 |
+| 80 | 25.0 | 5.82 ± 0.31 | 0.047 / 0.305 / 0.025 | 5.99 | 0.971 | 5.85 | 2.09 ± 0.59 | 11.72 |
+| 100 | 20.0 | 6.56 ± 0.27 | 0.018 / 0.271 / 0.025 | 6.70 | 0.979 | 6.63 | not detected | 13.23 |
+
+**Mach disk vs Ashkenas–Sherman:**
+- Over the correlation's data range (NPR ≥ 15), a weighted fit of x_md = C·√NPR gives **C = 0.659 ± 0.007**, against the correlation's 0.67 (1.6σ). The mean deviation is −2.0% and the largest is 3.4%.
+- Reduced χ² = 0.15: the stated error bars are conservative, because the full jitter spread is used.
+- Below the data range the simulation falls further under the correlation, with a ratio of 0.915 at NPR 5.
+- This −2% offset is well inside the scatter usually quoted for the Ashkenas–Sherman fit. Grid convergence of the CFD hasn't been checked yet, so it isn't attributed to physics.
+
+![Mach disk vs theory](results/figures/mach_disk_vs_theory.png)
+
+**Shock cells:**
+- The first cell after the Mach disk is 1.0–2.1 D long wherever it's detected (7 of 9 NPRs), with no clear trend in NPR.
+- The Prandtl–Pack vortex-sheet estimate grows from 2.1 to 13 D. Pack's model describes weakly underexpanded jets *without* a Mach disk. In these jets the downstream cells form in the thin supersonic annulus around the subsonic core, so the disagreement is expected rather than a failure.
+- The first-cell length is also the least robust quantity here: instantaneous frames disagree by 10–30%.
+
+![shock cells](results/figures/shock_cells.png)
+
 ## Known limitations so far
 - **Euler only:** no viscosity, turbulence or condensation. The shear layer is resolved only by the grid, and the far field isn't physical.
 - **Continuum assumption:** questionable below about 7 mbar ambient at D = 1 mm (see above).
 - **Grid convergence of the jet:** not yet quantified, only one resolution (40 cells per D).
-- **Optics:** paraxial, thin-phase-object approximation. There's no camera noise or blur in the images yet; stage 3 adds noise for the detection test. The knife is ideal (no lens aberrations).
+- **Optics:** paraxial, thin-phase-object approximation. The knife is ideal (no lens aberrations), and the camera model has noise and quantisation but no blur.
+- **Shock analysis:** the Mach-disk oscillation is that of an *inviscid* simulation, so the jitter term is model-dependent. The shock-cell spacing is fragile: frames disagree by 10–30%, and it's undetected at NPR 10 and 100.
 - **Gas:** air only; real lithography-tool jets may use other gases (K and γ differ).
